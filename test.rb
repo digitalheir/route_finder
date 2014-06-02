@@ -9,6 +9,6 @@ user_location = [52.3693745, 4.8955443]  # Latlongs: somewhere in Amsterdam
 
 events = TourHelper::find_events(tour_start, tour_end, user_location)
 
-puts "Fount #{events.length} things to do between #{tour_start} and #{tour_end}"
+puts "Found #{events.length} things to do between #{tour_start} and #{tour_end}"
 
 # TODO run algorithm to combine a location (latitude/longitude-pair) with these events to make a tour
