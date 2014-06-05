@@ -2,6 +2,7 @@ require 'sparql/client'
 require 'openssl'
 require 'geokit'
 require_relative 'sparql_queries'
+require_relative '../models/travel_node'
 
 module TourHelper
   def self.find_events(start_time, end_time, user_location)
@@ -36,10 +37,10 @@ module TourHelper
     events
   end
 
-  def self.generate_tour(events, tour_start, tour_end, from_latlong, opts={transportation: :walking})
+  def self.generate_tour(events, at_time, tour_end, at_location, transportation=:walking)
     # Order events to distance from starting location
     events_with_distance = events.map do |event|
-      distance = event.latlng.distance_to(from_latlong, {units: :kms})
+      distance = at_location.distance_to(event.latlng, {units: :kms})
       [distance, event]
     end
     events_with_distance.sort_by! do |event_with_distance|
@@ -47,12 +48,13 @@ module TourHelper
       event_with_distance[0]
     end
 
-    events_with_distance.each do |event|
+    events_with_distance.each do |event_with_distance|
       #TODO verify distances
       puts event[1].latlng
     end
 
     # Get route to closest event
-
+    # TODO
+    TravelNode.get_route(current_location, events_with_distance[0][1].latlng, transportation)
   end
 end
