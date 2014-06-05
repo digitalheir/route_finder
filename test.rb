@@ -13,8 +13,7 @@ events = TourHelper::find_events(tour_start, tour_end, user_location)
 
 puts "Found #{events.length} things to do between #{tour_start} and #{tour_end}"
 
-# TODO run algorithm to combine a location (latitude/longitude-pair) with these events to make a tour
-
+# Run algorithm to combine a location (latitude/longitude-pair) with these events to make a tour
 tour = TourHelper::generate_tour(events, tour_start, tour_end, user_location)
 
 event_count = 0

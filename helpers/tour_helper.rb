@@ -51,7 +51,8 @@ module TourHelper
     # Add events to the tour until get_suitable_event returns nil
     travel_finish = nil
     loop do
-      travel_to, event, return_to_base = get_suitable_event(events, running_time, tour_end, at_location, to_location, transportation_mode)
+      # Note that events is replaced with an event that doesn't contain the selected event
+      travel_to, event, return_to_base, events = get_suitable_event(events, running_time, tour_end, at_location, to_location, transportation_mode)
       if travel_to and event and return_to_base
         tour << travel_to
         tour << event
@@ -83,24 +84,28 @@ module TourHelper
     end
 
     # Find suitable event. Prefer the closest.
+    non_suitable = []
     events_with_distance.each do |event_with_distance|
       event = event_with_distance[1]
 
       # travel to/from are hardcoded to 5 minutes, for now
-      travel_to = 5*60
-      travel_from = 5*60
+      travel_time_to = 5*60
+      travel_time_from = 5*60
+
+      suitable_event = nil
+      travel_to = nil
+      return_to_base = nil
 
       # Check if event duration fits in schedule
-      if event.have_time(at_time, until_end, travel_to, travel_from)
+      if !suitable_event and event.have_time(at_time, until_end, travel_time_to, travel_time_from)
         # Get route to closest event
-
+        suitable_event = event
         travel_to = TravelNode.new(at_location, events_with_distance[0][1].latlng, transportation_means)
         return_to_base = TravelNode.new(event.latlng, return_location, transportation_means)
-
-        return travel_to, event, return_to_base
+      else
+        non_suitable << event
       end
     end
-    # Found no suitable candidate
-    nil
+    return travel_to, suitable_event, return_to_base, non_suitable
   end
 end
