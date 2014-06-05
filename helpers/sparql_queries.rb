@@ -1,7 +1,7 @@
 module SparqlQueries
   SPARQL_CLIENT = SPARQL::Client.new('http://api.artsholland.com/sparql/')
 # Fragments of SPARQL queries. We have multiple SPARQL queries, so re-use these strings
-  PREFIXES = 'PREFIX ah: <http://purl.org/artsholland/1.0/>
+  PREFIXES = '  PREFIX ah: <http://purl.org/artsholland/1.0/>
   PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
   PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
   PREFIX owl: <http://www.w3.org/2002/07/owl#>
@@ -32,10 +32,14 @@ module SparqlQueries
   SELECT DISTINCT ?event ?eventTitle ?productionTitle ?start ?end ?venue ?lat ?long ?address ?homepage ?eventImageUrl ?venueImageUrl {
   # Only select events that take place while we are about
   ?event time:hasBeginning ?start.
-  ?event time:hasEnd ?end. #TODO end is optional, but *if* it exists, make sure that it's afer endDate
 
-  FILTER(?start < \"#{start_time.iso8601}\"^^xsd:dateTime &&
-      ?end > \"#{start_time.iso8601}\"^^xsd:dateTime).
+  #end is optional, but *if* it exists, make sure that it's after start time
+  OPTIONAL {
+    ?event time:hasEnd ?end.
+    FILTER(?end > \"#{start_time.iso8601}\"^^xsd:dateTime).
+  }
+
+  FILTER(?start < \"#{start_time.iso8601}\"^^xsd:dateTime).
 
   # Get image urls if any
   OPTIONAL {

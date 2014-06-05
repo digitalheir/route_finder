@@ -15,4 +15,15 @@ puts "Found #{events.length} things to do between #{tour_start} and #{tour_end}"
 
 # TODO run algorithm to combine a location (latitude/longitude-pair) with these events to make a tour
 
-TourHelper::generate_tour(events, tour_start, tour_end, user_location)
+tour = TourHelper::generate_tour(events, tour_start, tour_end, user_location)
+
+event_count = 0
+travel_count = 0
+tour.each do |node|
+  if node.class == ThingToDo
+    event_count += 1
+  else
+    travel_count += 1
+  end
+end
+puts "Calculated a tour with #{event_count} things to do and #{travel_count} travels"

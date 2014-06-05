@@ -12,6 +12,9 @@ module TourHelper
     bounds = Geokit::Bounds::from_point_and_radius(user_location, 25, {units: :kms})
     query = SparqlQueries::events_that_have_lat_longs(start_time, end_time, bounds)
 
+    puts "Making query "
+    puts query
+
     # Make query against artsholland sparql endpoint
     # If we use the SPARQL client library, the server return a status 500 for some reason
     uri = URI('http://api.artsholland.com/sparql')
@@ -37,7 +40,38 @@ module TourHelper
     events
   end
 
-  def self.generate_tour(events, at_time, tour_end, at_location, transportation=:walking)
+  def self.generate_tour(events, tour_start, tour_end, at_location, transportation_mode=:walking)
+    running_time = tour_start
+
+    at_location = at_location
+    to_location = at_location # End at starting point
+
+    tour = []
+
+    # Add events to the tour until get_suitable_event returns nil
+    travel_finish = nil
+    loop do
+      travel_to, event, return_to_base = get_suitable_event(events, running_time, tour_end, at_location, to_location, transportation_mode)
+      if travel_to and event and return_to_base
+        tour << travel_to
+        tour << event
+
+        running_time += travel_to.duration # add time in seconds
+        running_time += event.projected_duration # add time in seconds
+
+        at_location = event.latlng # set current location to the event location
+
+        travel_finish = return_to_base
+      else
+        break
+      end
+    end
+    tour << travel_finish
+
+    tour
+  end
+
+  def self.get_suitable_event(events, at_time, until_end, at_location, return_location, transportation_means)
     # Order events to distance from starting location
     events_with_distance = events.map do |event|
       distance = at_location.distance_to(event.latlng, {units: :kms})
@@ -48,13 +82,25 @@ module TourHelper
       event_with_distance[0]
     end
 
+    # Find suitable event. Prefer the closest.
     events_with_distance.each do |event_with_distance|
-      #TODO verify distances
-      puts event[1].latlng
-    end
+      event = event_with_distance[1]
 
-    # Get route to closest event
-    # TODO
-    TravelNode.get_route(current_location, events_with_distance[0][1].latlng, transportation)
+      # travel to/from are hardcoded to 5 minutes, for now
+      travel_to = 5*60
+      travel_from = 5*60
+
+      # Check if event duration fits in schedule
+      if event.have_time(at_time, until_end, travel_to, travel_from)
+        # Get route to closest event
+
+        travel_to = TravelNode.new(at_location, events_with_distance[0][1].latlng, transportation_means)
+        return_to_base = TravelNode.new(event.latlng, return_location, transportation_means)
+
+        return travel_to, event, return_to_base
+      end
+    end
+    # Found no suitable candidate
+    nil
   end
 end

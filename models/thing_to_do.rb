@@ -100,6 +100,16 @@ class ThingToDo
     end
   end
 
+  # Returns how long this activity will probably take, in seconds.
+  def projected_duration
+    30 * 60 # Hardcode 30 minutes for now
+  end
+
+  def have_time(from_time, until_time, travel_to, travel_from)
+    time_left = until_time - from_time
+    travel_to + projected_duration + travel_from <= time_left
+  end
+
   def self.create_from_sparql_results(results)
     events = {}
     results.each do |result|
@@ -131,11 +141,11 @@ class ThingToDo
       if result['eventImageUrl']
         event.add_event_image result['eventImageUrl']
       end
-      if result['end']
-        event.end result['end']
+      if !(event.end) & result['end']
+        event.end = Time.parse(result['end'].value)
       end
-      if result['start']
-        event.start result['start']
+      if !(event.start) & result['start']
+        event.start = Time.parse(result['start'].value)
       end
     end
 
@@ -144,6 +154,7 @@ class ThingToDo
       avg_long = (event.longs.reduce { |sum, val| sum+val })/event.longs.length # average longitude
       event.latlng = Geokit::LatLng.new(avg_lat, avg_long)
     end
+
     return events
   end
 end
