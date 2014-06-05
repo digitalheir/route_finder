@@ -1,6 +1,10 @@
 require 'set'
 
 class ThingToDo
+  attr_accessor :start
+  attr_accessor :end
+  attr_accessor :latlng
+
   attr_reader :lats
   attr_reader :longs
   attr_reader :production_titles
@@ -11,6 +15,8 @@ class ThingToDo
   # Run on ThingToDo.new
   def initialize
     # Note that we use sets, so duplicate values are not added
+    @start = nil
+    @end = nil
     @lats = Set.new
     @longs = Set.new
     @venue_images = Set.new
@@ -18,6 +24,7 @@ class ThingToDo
     @production_titles = {}
     @event_titles = {}
   end
+
 
   def add_venue_image(url)
     @venue_images << url
@@ -96,7 +103,6 @@ class ThingToDo
   def self.create_from_sparql_results(results)
     events = {}
     results.each do |result|
-      # TODO 'event', 'lat', 'long', etc, are variables used in the SPARQL query. Make constants out of them.
       uri = result['event'].value
       event = events[uri]
       unless event
@@ -125,6 +131,18 @@ class ThingToDo
       if result['eventImageUrl']
         event.add_event_image result['eventImageUrl']
       end
+      if result['end']
+        event.end result['end']
+      end
+      if result['start']
+        event.start result['start']
+      end
+    end
+
+    events.each do |_, event|
+      avg_lat = (event.lats.reduce { |sum, val| sum+val })/event.lats.length # average latitude
+      avg_long = (event.longs.reduce { |sum, val| sum+val })/event.longs.length # average longitude
+      event.latlng = Geokit::LatLng.new(avg_lat, avg_long)
     end
     return events
   end
