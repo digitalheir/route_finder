@@ -102,7 +102,7 @@ class ThingToDo
 
   # Returns how long this activity will probably take, in seconds.
   def projected_duration
-    30 * 60 # Hardcode 30 minutes for now
+    30 * 60 # Hardcode at 30 minutes for now
   end
 
   def have_time(from_time, until_time, travel_to, travel_from)

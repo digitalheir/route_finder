@@ -1,8 +1,10 @@
 require 'sparql/client'
 require 'openssl'
 require 'geokit'
+require 'open-uri'
 require_relative 'sparql_queries'
 require_relative '../models/travel_node'
+require_relative '../models/venue'
 
 module TourHelper
   def self.find_events(start_time, end_time, user_location)
@@ -12,14 +14,15 @@ module TourHelper
     bounds = Geokit::Bounds::from_point_and_radius(user_location, 25, {units: :kms})
     query = SparqlQueries::events_that_have_lat_longs(start_time, end_time, bounds)
 
-    puts "Making query "
-    puts query
 
     # Make query against artsholland sparql endpoint
     # If we use the SPARQL client library, the server return a status 500 for some reason
-    uri = URI('http://api.artsholland.com/sparql')
-    response = Net::HTTP.new(uri.host, uri.port).start do |http|
-      request = Net::HTTP::Post.new(uri)
+
+    puts "Making query to #{SPARQL_ENDPOINT}"
+    # make query
+
+    response = Net::HTTP.new(SPARQL_ENDPOINT.host, SPARQL_ENDPOINT.port).start do |http|
+      request = Net::HTTP::Post.new(SPARQL_ENDPOINT)
       request.set_form_data({:query => query})
       request['Accept']='application/sparql-results+xml'
       http.request(request)
@@ -38,6 +41,14 @@ module TourHelper
     end
     #Return events array
     events
+  end
+
+  def self.make_array(string_or_array)
+    if string_or_array.class == String
+      [string_or_array]
+    else
+      string_or_array
+    end
   end
 
   def self.generate_tour(events, tour_start, tour_end, at_location, transportation_mode=:walking)
@@ -83,25 +94,27 @@ module TourHelper
       event_with_distance[0]
     end
 
-    # Find suitable event. Prefer the closest.
+    # travel to/from are hardcoded to 5 minutes, for now
+    travel_time_to = 5*60
+    travel_time_from = 5*60
+
+    suitable_event = nil
+    travel_to = nil
+    return_to_base = nil
     non_suitable = []
+
+    # Find suitable event. Prefer the closest one.
     events_with_distance.each do |event_with_distance|
       event = event_with_distance[1]
-
-      # travel to/from are hardcoded to 5 minutes, for now
-      travel_time_to = 5*60
-      travel_time_from = 5*60
-
-      suitable_event = nil
-      travel_to = nil
-      return_to_base = nil
-
       # Check if event duration fits in schedule
       if !suitable_event and event.have_time(at_time, until_end, travel_time_to, travel_time_from)
         # Get route to closest event
         suitable_event = event
         travel_to = TravelNode.new(at_location, events_with_distance[0][1].latlng, transportation_means)
         return_to_base = TravelNode.new(event.latlng, return_location, transportation_means)
+
+        #TODO filter for production uris
+        puts "Picked #{event.uri}"
       else
         non_suitable << event
       end

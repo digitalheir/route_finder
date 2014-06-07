@@ -1,4 +1,6 @@
+require 'sparql/client'
 module SparqlQueries
+  SPARQL_ENDPOINT = URI('http://api.artsholland.com/sparql')
   SPARQL_CLIENT = SPARQL::Client.new('http://api.artsholland.com/sparql/')
 # Fragments of SPARQL queries. We have multiple SPARQL queries, so re-use these strings
   PREFIXES = '  PREFIX ah: <http://purl.org/artsholland/1.0/>
@@ -17,7 +19,7 @@ module SparqlQueries
   PREFIX fn: <http://www.w3.org/2005/xpath-functions#>
   PREFIX gr: <http://purl.org/goodrelations/v1#>
   PREFIX gn: <http://www.geonames.org/ontology#>'
-  LIMIT = '1000'
+  LIMIT = '10000'
 
   ##
   # SPARQL queries:
@@ -34,7 +36,7 @@ module SparqlQueries
   ?event time:hasBeginning ?start.
 
   #end is optional, but *if* it exists, make sure that it's after start time
-  OPTIONAL {
+  OPTIONAL{
     ?event time:hasEnd ?end.
     FILTER(?end > \"#{start_time.iso8601}\"^^xsd:dateTime).
   }
@@ -130,5 +132,79 @@ module SparqlQueries
   }
 } LIMIT #{LIMIT}
     "
+  end
+
+  # TODO also query opening / closing times
+  def self.venues_near(bounds)
+    "#{PREFIXES}
+    SELECT DISTINCT ?venue ?title ?imageUrl ?lat ?long {
+      ?venue a ah:Venue.
+      # Only select venues with coordinates
+      ?venue geo:lat ?lat;
+             geo:long ?long.
+
+      # Filter within a square of 25km
+      FILTER(
+        ?lat > #{bounds.sw.lat} &&
+        ?lat < #{bounds.ne.lat} &&
+        ?long < #{bounds.ne.lng} &&
+        ?long > #{bounds.sw.lng}
+      ) .
+
+      OPTIONAL {
+        ?venue dc:title ?title.
+      }
+
+      OPTIONAL {
+        ?venue ah:attachment ?venueAfbeelding.
+        ?venueAfbeelding ah:attachmentType ah:AttachmentTypeAfbeelding.
+        ?venueAfbeelding ah:url ?imageUrl.
+      }
+    }LIMIT #{LIMIT}"
+  end
+
+  def self.events(bounds, start_time, end_time)
+    "#{PREFIXES}
+    SELECT DISTINCT ?event ?eventType ?production ?venue ?title ?imageUrl ?start ?end {
+      ?event ah:eventStatus ?status;
+             ah:production ?production; # An event is always an instance of a production
+             ah:venue ?venue.
+
+      FILTER(?status != ah:eventStatusCancelled && ?status != ah:SoldOut && ?status != ah:Postponed)
+
+      # Only select events with venues within bounds
+      ?venue geo:lat ?lat;
+             geo:long ?long.
+
+      # Only select events that start before the end of our tour (and optionally, end after the start of the tour)
+      ?event time:hasBeginning ?start.
+      FILTER(?start < \"#{end_time.iso8601}\"^^xsd:dateTime).
+
+      # Filter within a square of 25km
+      FILTER(
+        ?lat > #{bounds.sw.lat} &&
+        ?lat < #{bounds.ne.lat} &&
+        ?long < #{bounds.ne.lng} &&
+        ?long > #{bounds.sw.lng}
+      ) .
+
+      # End is optional, but *if* it exists, make sure that it's after start time. If it doesn't, make sure the event starts after the tour starts
+      {
+        ?event a ah:Event.
+        ?event time:hasEnd ?end.
+        FILTER(?end > \"#{start_time.iso8601}\"^^xsd:dateTime).
+      } UNION {
+        ?event a ah:Event.
+        FILTER NOT EXISTS{?event time:hasEnd ?end.}
+        FILTER(?start > \"#{(start_time).iso8601}\"^^xsd:dateTime).
+      }
+
+      # Get image urls if any
+      OPTIONAL {
+        ?event ah:attachment ?eventAfbeelding.
+        ?eventAfbeelding ah:attachmentType ah:AttachmentTypeAfbeelding.
+        ?eventAfbeelding ah:url ?imageUrl.
+      }
+    }ORDER BY DESC(?start) LIMIT 10000" # get newest events
   end
 end
