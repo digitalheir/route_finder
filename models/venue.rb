@@ -20,7 +20,7 @@ class Venue
   # Returns how long traveling to here will probably take, in seconds.
   # Based on a conservative walking speed of 4 km/h, multiplied by 1.2 to account for the fact that you probably can't walk in a straight line
   def travel_time(from)
-    1.2 * @latlng.distance_to(from, {units: :kms}) / 4 / 60 / 60
+    1.2 * (@latlng.distance_to(from, {units: :kms}) / 4) * 60 * 60
   end
 
   # TODO maybe use a smarter algorithm?

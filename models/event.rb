@@ -25,6 +25,43 @@ class Event
     @descriptions = descriptions
   end
 
+
+  def get_display_title(lang)
+    title = nil
+    if titles.length > 0
+      title = find_title titles, lang
+    end
+    if title == nil and production.titles.length > 0
+      title = find_title production.titles, lang
+    end
+    if title == nil and venue.titles.length > 0
+      title = find_title venue.titles, lang
+    end
+    title
+  end
+
+  def find_title(map, lang)
+    if map[lang] and map[lang].length > 0
+      ApplicationHelper.sample(map[lang])
+    else
+      if map.length > 0
+        #Get different language, preferrably English
+        if map[:en] and map[:en].length > 0
+          ApplicationHelper.sample(map[:en])
+        elsif map[nil] and map[nil].length > 0
+          ApplicationHelper.sample(map[nil])
+        else
+          map.each do |_, titles|
+            return ApplicationHelper.sample(titles)
+          end
+        end
+      else
+        # No title available in map
+        nil
+      end
+    end
+  end
+
   # Returns how long this activity will probably take, in seconds.
   def projected_duration
     if @end and @start and @end - @start > 60 # difference should be at least 1 minute, or else we won't trust it
