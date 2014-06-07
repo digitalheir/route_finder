@@ -23,6 +23,15 @@ class Venue
     1.2 * @latlng.distance_to(from, {units: :kms}) / 4 / 60 / 60
   end
 
+  # TODO maybe use a smarter algorithm?
+  def travel_time_to(at_time, to)
+    travel_time to
+  end
+
+  def travel_time_from(at_time, from)
+    travel_time from
+  end
+
   # Returns a map of venue uris to venues
   def self.get_venues(bounds)
     venues_sparql = SparqlQueries.venues_near(bounds)
@@ -73,11 +82,11 @@ class Venue
       end
 
       if result['title']
-        add_title venue, result['title']
+        add_title venue[:titles], result['title']
       end
 
       if result['imageUrl']
-        venue[:images] << result['imageUrl']
+        venue[:images] << result['imageUrl'].value
       end
     end
 
@@ -97,6 +106,6 @@ class Venue
       titles_for_lang=Set.new
       map[title.language] = titles_for_lang
     end
-    titles_for_lang << title
+    titles_for_lang << title.value
   end
 end

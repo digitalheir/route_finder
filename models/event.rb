@@ -3,7 +3,6 @@ require_relative '../helpers/sparql_queries'
 
 class Event
   attr_reader :uri
-  attr_reader :eventType
   attr_reader :titles
   attr_reader :start
   attr_reader :end
@@ -11,19 +10,52 @@ class Event
   attr_reader :production
   attr_reader :images
 
-  def initialize(uri, eventType, titles, start_time, end_time, venue, production, images)
+  def initialize(uri, titles, start_time, end_time, venue, production, images, descriptions, short_descriptions)
     @uri = uri
-    @eventType = eventType
     @titles = titles
     @start = start_time
     @end = end_time
+    unless venue
+      throws Error('Venue must be defined')
+    end
     @venue = venue
     @production = production
     @images = images
+    @short_descriptions = short_descriptions
+    @descriptions = descriptions
+  end
+
+  # Returns how long this activity will probably take, in seconds.
+  def projected_duration
+    if @end and @start and @end - @start > 60 # difference should be at least 1 minute, or else we won't trust it
+      @end - @start
+    else
+      30 * 60 # Hardcode at 30 minutes for now TODO make different estimates based on production (e.g., exhibit, movie)
+    end
+  end
+
+  def is_suitable_event(from_time, until_time, from_location, return_location)
+    travel_to = @venue.travel_time_from(from_time, from_location)
+
+
+    wait_until_event_starts = @start - (from_time+travel_to) # TODO we can't walk into a movie that already started, but we *can* walk into an exhibition that has already started
+    if wait_until_event_starts < 0
+      wait_until_event_starts = 0
+    end
+
+    time_until_event_end = travel_to + wait_until_event_starts + projected_duration
+    travel_from = @venue.travel_time_to(from_time + time_until_event_end, return_location)
+
+    if wait_until_event_starts > 10*60
+      return false, travel_to, travel_from # Don't wait longer than 10 minutes
+    end
+
+    time_left = until_time - from_time
+    return (time_until_event_end + travel_from <= time_left), travel_to, travel_from
   end
 
   # Returns a map of venue uris to venues
-  def self.get_events(venues, bounds, start_time, end_time)
+  def self.get_events(venues, productions, bounds, start_time, end_time)
     events_sparql = SparqlQueries.events(bounds, start_time, end_time)
     puts "Query events from #{SparqlQueries::SPARQL_ENDPOINT}"
     # Make query
@@ -38,7 +70,7 @@ class Event
     case response
       when Net::HTTPSuccess # Response code 2xx: success
         results = SparqlQueries::SPARQL_CLIENT.parse_response(response)
-        events = create_from_sparql_results(venues, results)
+        events = create_from_sparql_results(venues, productions, results)
       when Net::HTTPRedirection
         #TODO follow redirect
         puts 'redirect'
@@ -50,59 +82,72 @@ class Event
     events
   end
 
-  def self.create_from_sparql_results(venues, results)
+  def self.create_from_sparql_results(venues, productions, results)
     events = {}
-    values_map = {}
+    value_maps = {}
     results.each do |result|
       uri = result['event'].value
-      event = values_map[uri]
-      unless event
+      value_map = value_maps[uri]
+      unless value_map
         # Note that we use sets, so duplicate values are not added
-        event = {:titles => {}, :images => Set.new}
-        values_map[uri] = event
+        value_map = {:titles => {}, :descriptions => {}, :shortDescriptions => {}, :images => Set.new}
+        value_maps[uri] = value_map
       end
 
       if result['eventType']
-        event[:eventType] = result['eventType']
+        value_map[:eventType] = result['eventType'].value
       end
       if result['start']
-        event[:start] = result['start']
+        value_map[:start] = Time.parse(result['start'].value)
       end
       if result['end']
-        event[:end] = result['end']
+        value_map[:end] = Time.parse(result['end'].value)
       end
+
       if result['venue']
         venue = venues[result['venue'].to_s]
         unless venue
           puts "WARNING: venue #{result['venue'].to_s} not found."
         end
-        event[:venue] = venue
+        value_map[:venue] = venue
       end
+
       if result['production']
-        event[:production] = result['production']
+        production = productions[result['production'].to_s]
+        unless production
+          puts "WARNING: production #{result['production'].to_s} not found."
+        end
+        value_map[:production] = production
       end
 
       if result['title']
-        add_title event, result['title']
+        add_string(value_map[:titles], result['title'])
+      end
+
+      if result['shortDescription']
+        add_string(value_map[:shortDescriptions], result['shortDescription'])
+      end
+      if result['description']
+        add_string(value_map[:descriptions], result['description'])
       end
 
       if result['imageUrl']
-        event[:images] << result['imageUrl']
+        value_map[:images] << result['imageUrl'].value
       end
     end
 
-    values_map.each do |uri, vals|
-      events[uri] = Event.new(uri, vals[:eventType], vals[:titles], vals[:start], vals[:end], vals[:venue], vals[:production], vals[:images])
+    value_maps.each do |uri, vals|
+      events[uri] = Event.new(uri, vals[:titles], vals[:start], vals[:end], vals[:venue], vals[:production], vals[:images], vals[:descriptions], vals[:shortDescriptions])
     end
     return events
   end
 
-  def self.add_title(map, title)
+  def self.add_string(map, title)
     titles_for_lang = map[title.language]
     unless titles_for_lang
       titles_for_lang=Set.new
       map[title.language] = titles_for_lang
     end
-    titles_for_lang << title
+    titles_for_lang << title.value
   end
 end
