@@ -28,6 +28,35 @@ module SparqlQueries
   # The SPARQL client should account for that, but beware off-by-2-hours errors.
   ##
 
+  def self.filter_loc(bounds)
+    return "
+    ?venue geo:lat ?lat;
+           geo:long ?long.
+
+    # Filter within a square of 25km
+  FILTER(
+    ?lat > #{bounds.sw.lat} &&
+    ?lat < #{bounds.ne.lat} &&
+    ?long < #{bounds.ne.lng} &&
+    ?long > #{bounds.sw.lng}
+  ) ."
+  end
+
+  def self.filter_time(start_time, end_time)
+    return "
+      # Filter for activities within the start and end times
+      ?event time:hasBeginning ?start.
+      FILTER(?start < \"#{end_time.iso8601}\"^^xsd:dateTime).
+      { 
+        ?event time:hasEnd ?end. 
+        FILTER(?end > \"#{start_time.iso8601}\"^^xsd:dateTime).
+      } UNION {
+        FILTER NOT EXISTS{?event time:hasEnd ?end.}
+      }
+      "
+  end
+
+
   # Returns a SPARQL query for all events that have an address, together with a bunch of metadata
   def self.events_that_have_lat_longs(start_time, end_time, bounds)
     "#{PREFIXES}
@@ -36,12 +65,7 @@ module SparqlQueries
   ?event time:hasBeginning ?start.
 
   #end is optional, but *if* it exists, make sure that it's after start time
-  OPTIONAL{
-    ?event time:hasEnd ?end.
-    FILTER(?end > \"#{start_time.iso8601}\"^^xsd:dateTime).
-  }
-
-  FILTER(?start < \"#{start_time.iso8601}\"^^xsd:dateTime).
+  #{self.filter_time(start_time, end_time)}
 
   # Get image urls if any
   OPTIONAL {
@@ -62,15 +86,8 @@ module SparqlQueries
   # For now only select venues with coordinates
   ?venue geo:lat ?lat;
          geo:long ?long.
-
-  # Filter within a square of 25km
-  FILTER(
-    ?lat > #{bounds.sw.lat} &&
-    ?lat < #{bounds.ne.lat} &&
-    ?long < #{bounds.ne.lng} &&
-    ?long > #{bounds.sw.lng}
-  ) .
-
+  #{self.filter_loc(bounds)}
+  
   # Resolve title:
   OPTIONAL {
     ?event dc:title ?eventTitle. # Not all events have a title...
@@ -89,17 +106,8 @@ module SparqlQueries
     "#{PREFIXES}
     SELECT DISTINCT ?venue ?title ?imageUrl ?lat ?long {
       ?venue a ah:Venue.
-      # Only select venues with coordinates
-      ?venue geo:lat ?lat;
-             geo:long ?long.
-
-      # Filter within a square of 25km
-      FILTER(
-        ?lat > #{bounds.sw.lat} &&
-        ?lat < #{bounds.ne.lat} &&
-        ?long < #{bounds.ne.lng} &&
-        ?long > #{bounds.sw.lng}
-      ) .
+      
+      #{self.filter_loc(bounds)}
 
       OPTIONAL {
         ?venue dc:title ?title.
@@ -123,32 +131,9 @@ module SparqlQueries
 
       FILTER(?status != ah:eventStatusCancelled && ?status != ah:SoldOut && ?status != ah:Postponed)
 
-      # Only select events with venues within bounds
-      ?venue geo:lat ?lat;
-             geo:long ?long.
+      #{self.filter_loc(bounds)}
 
-      # Only select events that start before the end of our tour (and optionally, end after the start of the tour)
-      ?event time:hasBeginning ?start.
-      FILTER(?start < \"#{end_time.iso8601}\"^^xsd:dateTime).
-
-      # Filter within a square of 25km
-      FILTER(
-        ?lat > #{bounds.sw.lat} &&
-        ?lat < #{bounds.ne.lat} &&
-        ?long < #{bounds.ne.lng} &&
-        ?long > #{bounds.sw.lng}
-      ) .
-
-      # End is optional, but *if* it exists, make sure that it's after start time. If it doesn't, make sure the event starts after the tour starts
-      {
-        ?event a ah:Event.
-        ?event time:hasEnd ?end.
-        FILTER(?end > \"#{start_time.iso8601}\"^^xsd:dateTime).
-      } UNION {
-        ?event a ah:Event.
-        FILTER NOT EXISTS{?event time:hasEnd ?end.}
-        FILTER(?start > \"#{(start_time).iso8601}\"^^xsd:dateTime).
-      }
+      #{self.filter_time(start_time, end_time)}
 
       OPTIONAL {
         ?production ah:languageNoProblem ?languageNoProblem
@@ -190,39 +175,17 @@ module SparqlQueries
   def self.events(bounds, start_time, end_time)
     "#{PREFIXES}
     SELECT DISTINCT ?event ?eventType ?production ?venue ?title ?imageUrl ?start ?end ?shortDescription ?description {
+      ?event a ah:Event.
+
       ?event ah:eventStatus ?status;
              ah:production ?production; # An event is always an instance of a production
              ah:venue ?venue.
-
+      
+      #{self.filter_time(start_time, end_time)}
+      
+      #{self.filter_loc(bounds)}
+      
       FILTER(?status != ah:eventStatusCancelled && ?status != ah:SoldOut && ?status != ah:Postponed)
-
-      # Only select events with venues within bounds
-      ?venue geo:lat ?lat;
-             geo:long ?long.
-
-      # Only select events that start before the end of our tour (and optionally, end after the start of the tour)
-      ?event time:hasBeginning ?start.
-      FILTER(?start < \"#{end_time.iso8601}\"^^xsd:dateTime).
-
-      # Filter within a square of 25km
-      FILTER(
-        ?lat > #{bounds.sw.lat} &&
-        ?lat < #{bounds.ne.lat} &&
-        ?long < #{bounds.ne.lng} &&
-        ?long > #{bounds.sw.lng}
-      ) .
-
-      # End is optional, but *if* it exists, make sure that it's after start time. If it doesn't, make sure the event starts after the tour starts
-      {
-        ?event a ah:Event.
-        ?event time:hasEnd ?end.
-        FILTER(?end > \"#{start_time.iso8601}\"^^xsd:dateTime).
-      } UNION {
-        ?event a ah:Event.
-        FILTER NOT EXISTS{?event time:hasEnd ?end.}
-        FILTER(?start > \"#{(start_time).iso8601}\"^^xsd:dateTime).
-      }
-
       # Get image urls if any
       OPTIONAL {
         ?event ah:attachment ?eventAfbeelding.
