@@ -66,7 +66,9 @@ module TourHelper
       # Note that events is replaced with an event that doesn't contain the selected production
       travel_to, event, return_to_base, events = get_suitable_activity(events, running_time, tour_end, at_location, base_location, transportation_mode)
       if travel_to and event and return_to_base
-        tour << travel_to
+        if travel_to.duration >= 60
+          tour << travel_to # Only add travel nodes if travel time is at least a minute
+        end
         tour << event
 
         running_time += travel_to.duration # add time in seconds
@@ -79,15 +81,17 @@ module TourHelper
         break
       end
     end
-    tour << travel_finish
+    if travel_finish
+      tour << travel_finish
+    end
 
     tour
   end
 
-  def self.get_suitable_activity(events, at_time, until_end, at_location, return_location, transportation_means)
+  def self.get_suitable_activity(events, at_time, until_end, at_latlng, return_latlng, transportation_means)
     # Order events to distance from starting location
     events_with_distance = events.map do |event|
-      distance = at_location.distance_to(event.venue.latlng, {units: :kms})
+      distance = at_latlng.distance_to(event.venue.latlng, {units: :kms})
       [distance, event]
     end
     events_with_distance.sort_by! do |event_with_distance|
@@ -103,12 +107,12 @@ module TourHelper
     events_with_distance.each do |event_with_distance|
       event = event_with_distance[1]
       # Check if event duration fits in schedule
-      is_suitable, travel_time_to, travel_time_back = event.is_suitable_event(at_time, until_end, at_location, return_location)
+      is_suitable, travel_time_to, travel_time_back = event.is_suitable(at_time, until_end, at_latlng, return_latlng)
       if !suitable_event and is_suitable
-        # Get route to closest event with less than 10 minutes waiting time
+        # Get route to closest event with less than 1 hour waiting time
         suitable_event = event
-        travel_to = TravelNode.new(at_location, event.venue, transportation_means, travel_time_to)
-        return_to_base = TravelNode.new(event.venue, return_location, transportation_means, travel_time_back)
+        travel_to = TravelNode.new(at_latlng, event.venue.latlng, transportation_means, travel_time_to)
+        return_to_base = TravelNode.new(event.venue.latlng, return_latlng, transportation_means, travel_time_back)
       end
     end
 
