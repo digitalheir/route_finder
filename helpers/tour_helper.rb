@@ -123,11 +123,30 @@ module TourHelper
     remaining_candidates = []
     events_with_distance.each do |event_with_distance|
       event = event_with_distance[1]
-      unless event == suitable_event or (suitable_event and event.production == suitable_event.production)
+      if is_still_suitable_after(event, suitable_event)
         remaining_candidates << event
       end
     end
 
     return travel_to, suitable_event, return_to_base, remaining_candidates
+  end
+
+  NON_REPEATING_PRODUCTION_TYPES = ['http://purl.org/artsholland/1.0/ProductionTypeFilm', 'http://purl.org/artsholland/1.0/ProductionTypeFilmtheater']
+
+  def self.is_still_suitable_after(event, after)
+    if suitable_event
+      if event.production.uri == suitable_event.production.uri
+        # We don't want to do the same thing twice
+        return false
+      else
+        NON_REPEATING_PRODUCTION_TYPES.each do |production_type_uri|
+          if event.production.production_type_uris.include? production_type_uri and after.production_type_uris.include? production_type_uri
+            # We don't want to do this kind of thing twice
+            return false
+          end
+        end
+      end
+    end
+    return event != after
   end
 end

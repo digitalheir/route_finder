@@ -2,7 +2,8 @@ require 'geokit'
 
 class Production
   attr_reader :uri
-  attr_reader :production_type
+  attr_reader :production_types
+  attr_reader :production_type_uris
   attr_reader :genres
   attr_reader :titles
   attr_reader :images
@@ -10,9 +11,10 @@ class Production
   attr_reader :short_descriptions
   attr_reader :descriptions
 
-  def initialize(uri, production_type, genres, titles, images, homepage, short_descriptions, descriptions)
+  def initialize(uri, production_types, production_type_uris, genres, titles, images, homepage, short_descriptions, descriptions)
     @uri=uri
-    @production_type = production_type
+    @production_types = production_types
+    @production_type_uris = production_type_uris
     @genres = genres
     @titles = titles
     @images = images
@@ -27,6 +29,14 @@ class Production
       desc = find_string_in_map(@descriptions, lang)
     end
     desc
+  end
+
+  def self.sample_genre(lang)
+     find_string_in_map(@genres, lang)
+  end
+
+  def self.sample_production_type(lang)
+     find_string_in_map(@production_types, lang)
   end
 
   def self.get_productions(bounds, start_time, end_time)
@@ -56,6 +66,7 @@ class Production
     productions
   end
 
+
   def self.create_from_sparql_results(results)
     # ?production ?productionType ?genre ?title ?imageUrl ?homepage ?shortDescription ?description
     productions = {}
@@ -65,16 +76,20 @@ class Production
       production = values_map[uri]
       unless production
         # Note that we use sets, so duplicate values are not added
-        production = {:genres => Set.new, :titles => {}, :images => Set.new, :shortDescriptions => {}, :descriptions => {}}
+        production = {:genres => Set.new, :productionTypeUris => Set.new, :productionTypes => {}, :titles => {}, :images => Set.new, :shortDescriptions => {}, :descriptions => {}}
         values_map[uri] = production
       end
 
+      if result['productionTypeUri']
+        production[:productionTypeUris] << result['productionTypeUri'].value
+      end
+
       if result['productionType']
-        production[:productionType] = result['productionType']
+        add_string(production[:productionTypes], result['productionType'])
       end
 
       if result['genre']
-        production[:genres] << result['genre']
+        production[:genres] << result['genre'].value
       end
 
       if result['title']
@@ -88,9 +103,11 @@ class Production
       if result['homepage']
         production[:homepage] = result['homepage'].value
       end
+
       if result['shortDescription']
         add_string(production[:shortDescriptions], result['shortDescription'])
       end
+
       if result['description']
         add_string(production[:descriptions], result['description'])
       end
@@ -98,7 +115,8 @@ class Production
 
     values_map.each do |uri, vals|
       productions[uri] = Production.new(uri,
-                                        vals[:productionType],
+                                        vals[:productionTypes],
+                                        vals[:productionTypeUris],
                                         vals[:genres],
                                         vals[:titles],
                                         vals[:images],

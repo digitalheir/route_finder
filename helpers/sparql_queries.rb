@@ -159,7 +159,8 @@ module SparqlQueries
       }
 
       OPTIONAL {
-        ?production ah:productionType ?productionType
+        ?production ah:productionType ?productionTypeUri
+        ?productionTypeUri rdfs:label ?productionType
       }
 
       # Get titles if any
