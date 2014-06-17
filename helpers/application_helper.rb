@@ -12,8 +12,8 @@ module ApplicationHelper
     else
       if map.length > 0
         #Get different language, preferrably English
-        if map[:en] and map[:en].length > 0
-          ApplicationHelper.sample(map[:en])
+        if map['en'] and map['en'].length > 0
+          ApplicationHelper.sample(map['en'])
         elsif map[nil] and map[nil].length > 0
           ApplicationHelper.sample(map[nil])
         else
