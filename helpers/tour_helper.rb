@@ -133,20 +133,20 @@ module TourHelper
 
   NON_REPEATING_PRODUCTION_TYPES = ['http://purl.org/artsholland/1.0/ProductionTypeFilm', 'http://purl.org/artsholland/1.0/ProductionTypeFilmtheater']
 
-  def self.is_still_suitable_after(event, after)
-    if suitable_event
-      if event.production.uri == suitable_event.production.uri
+  def self.is_still_suitable_after(candidate, after)
+    if after
+      if candidate.production.uri == after.production.uri
         # We don't want to do the same thing twice
         return false
       else
         NON_REPEATING_PRODUCTION_TYPES.each do |production_type_uri|
-          if event.production.production_type_uris.include? production_type_uri and after.production_type_uris.include? production_type_uri
+          if candidate.production.production_type_uris.include? production_type_uri and after.production_type_uris.include? production_type_uri
             # We don't want to do this kind of thing twice
             return false
           end
         end
       end
     end
-    return event != after
+    return candidate != after
   end
 end
