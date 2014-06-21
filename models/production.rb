@@ -60,6 +60,7 @@ class Production
         puts 'redirect'
       else
         #TODO handle error
+        puts query
         puts 'error'
     end
     #Return map

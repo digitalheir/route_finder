@@ -1,7 +1,6 @@
 require 'chronic'
 require 'openssl'
 require 'geokit'
-require_relative 'models/thing_to_do'
 require_relative 'models/venue'
 require_relative 'models/event'
 require_relative 'models/production'
