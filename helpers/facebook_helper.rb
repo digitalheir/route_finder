@@ -3,16 +3,31 @@ require 'koala'
 require_relative '../models/venue'
 require_relative '../models/event'
 
-module FacebookQueries
-    #replace this with a new token from: https://developers.facebook.com/tools/explorer/
-    #Session expires very quickly, so you'll have to get these a lot.
-    TOKEN = "CAACEdEose0cBAG64ZBbUSl2jTqoBFuuUoPa3PWpLnTpZAoSxPcYolSBr5xLy1ZAptgitWCpjNHATcb4IjCyHvjNXvNsnABnHtC1uxzZAFhKtFkPX5du2YalPW2MRinEiFZA9tjizfGJ09S9phPj8fIwCvimmKtVkVyaRCOt1rxmus2P22i1b5mwGWb34u0NsZD"
+class FacebookHelper
+    attr_reader :token
 
+    def initialize()
+        user = self.GetFacebookTestUser()
+
+        @token = user["access_token"]
+        
+    end
     #Superhacky way to get around openssl errors. Not fit for any production code
     OpenSSL::SSL::VERIFY_PEER = OpenSSL::SSL::VERIFY_NONE
 
-    def self.GatherVenuesAndEvents()
-        graph = Koala::Facebook::API.new(TOKEN)
+    APP_ID = "483468301796568"
+    SECRET = "5b321735caca4690e61fda1e47210f05"
+    
+    def GetFacebookTestUser()
+        test_users = Koala::Facebook::TestUsers.new(:app_id => APP_ID, :secret => SECRET)
+        
+        user = test_users.create(true, "user_events")
+        
+        return user      
+    end
+
+    def GatherVenuesAndEvents()
+        graph = Koala::Facebook::API.new(self.token)
 
         events_raw = []
         
@@ -25,18 +40,21 @@ module FacebookQueries
         results.each {|result| 
             #Check if the places we found are connected to any events
             events = graph.get_object("#{result['id']}/events", {"fields" => "id, name, start_time, end_time, cover, description"})
+            
             if events.length != 0
-                
+                #Gather coordinates
                 lat  = Float(result["location"]["latitude"])
                 long = Float(result["location"]["longitude"])
 
                 latlng = Geokit::LatLng.new(lat, long)
                 
+                #Check for cover photo
                 if result.key?("cover")
                     cover_photo = result["cover"]["source"]
                 else
                     cover_photo = ""
                 end
+
                 name = result["name"]
 
                 titles = {":en" => name, ":nl" => name}
@@ -44,7 +62,9 @@ module FacebookQueries
 
                 #Use facebook page as a URI
                 venue = Venue.new("https://www.facebook.com/#{name}", titles, images, latlng, lat, long)
+                
                 proc_venues << venue
+                
                 #we add events to the events_raw data
                 events.each { |event| events_raw << {"event" => event,"venue" => venue} }                
                 
@@ -53,6 +73,7 @@ module FacebookQueries
         }
         proc_events = []
         puts "Events:  #{events_raw.length}"
+        
         events_raw.each{ |event|
             uri = "https://www.facebook.com/events/#{event['id']}"
             titles = {":nl" => event["name"]}
